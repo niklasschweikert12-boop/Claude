@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { parsePricelist, lookupDeal } from './utils/pricelistLoader';
 import { calculateDeal } from './utils/calculator';
 import { generateMessage } from './utils/anthropic';
@@ -32,8 +32,6 @@ export default function App() {
   const [plattform, setPlattform] = useState('Kleinanzeigen');
   const [notiz, setNotiz] = useState('');
   const [modelQuery, setModelQuery] = useState('');
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const modelRef = useRef(null);
   const [messages, setMessages] = useState({ verhandlung: '', kauf: '', ablehnung: '' });
   const [loadingMsg, setLoadingMsg] = useState({ verhandlung: false, kauf: false, ablehnung: false });
   const [msgError, setMsgError] = useState('');
@@ -44,15 +42,6 @@ export default function App() {
     if (saved) {
       try { setPricelist(JSON.parse(saved)); } catch { /* ignore */ }
     }
-  }, []);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (modelRef.current && !modelRef.current.contains(e.target))
-        setShowModelDropdown(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => { setSpeicher(''); }, [modell]);
@@ -249,29 +238,26 @@ export default function App() {
             <h2 className="text-base font-semibold text-gray-300 uppercase tracking-wider text-left">Gerät bewerten</h2>
 
             {/* Modell */}
-            <div className="relative" ref={modelRef}>
+            <div>
               <label className="block text-xs text-gray-500 mb-1.5">Modell</label>
               <input
                 type="text"
-                value={modell || modelQuery}
-                onChange={(e) => { setModelQuery(e.target.value); setModell(''); setShowModelDropdown(true); }}
-                onFocus={() => setShowModelDropdown(true)}
-                placeholder="Modell suchen…"
-                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                value={modelQuery}
+                onChange={(e) => { setModelQuery(e.target.value); setModell(''); }}
+                placeholder="Suchen…"
+                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors mb-2"
               />
-              {showModelDropdown && filteredModels.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                  {filteredModels.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setModell(m); setModelQuery(m); setShowModelDropdown(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-800 text-gray-200 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <select
+                value={modell}
+                onChange={(e) => { setModell(e.target.value); setModelQuery(e.target.value); }}
+                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                size={Math.min(8, filteredModels.length + 1)}
+              >
+                <option value="">— Modell wählen —</option>
+                {filteredModels.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
             </div>
 
             {/* Speicher */}
