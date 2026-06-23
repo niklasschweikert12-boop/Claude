@@ -1,15 +1,11 @@
 import * as XLSX from 'xlsx';
 
-// Find a column value case-insensitively and with common variations
 function col(row, ...names) {
   const rowKeys = Object.keys(row);
   for (const name of names) {
-    // exact match first
     if (row[name] !== undefined && row[name] !== '') return row[name];
-    // case-insensitive
     const found = rowKeys.find((k) => k.toLowerCase() === name.toLowerCase());
     if (found && row[found] !== undefined && row[found] !== '') return row[found];
-    // partial match (key contains the search term)
     const partial = rowKeys.find((k) => k.toLowerCase().includes(name.toLowerCase()));
     if (partial && row[partial] !== undefined && row[partial] !== '') return row[partial];
   }
@@ -17,8 +13,7 @@ function col(row, ...names) {
 }
 
 function numCol(row, ...names) {
-  const v = col(row, ...names);
-  return parseFloat(v) || 0;
+  return parseFloat(col(row, ...names)) || 0;
 }
 
 export function parsePricelist(arrayBuffer) {
@@ -33,31 +28,55 @@ export function parsePricelist(arrayBuffer) {
 
   if (rows.length === 0) throw new Error('Sheet ist leer oder hat kein Header-Format.');
 
-  // Log available columns for debugging
   const availableCols = Object.keys(rows[0] || {});
-  console.log('[Preisliste] Gefundene Spalten:', availableCols);
-  console.log('[Preisliste] Erste Zeile:', rows[0]);
+  const firstRow = rows[0] || {};
+  const sheetNames = workbook.SheetNames;
+
+  console.log('[Preisliste] Sheets:', sheetNames);
+  console.log('[Preisliste] Verwendet:', sheetName);
+  console.log('[Preisliste] Spalten:', availableCols);
+  console.log('[Preisliste] Erste Zeile:', firstRow);
+
+  // Try to auto-detect the Deal-Key column
+  // It should contain pipe-separated values like "iPhone|iPhone 16|128GB"
+  let dealKeyCol = null;
+  for (const colName of availableCols) {
+    const sampleVal = String(firstRow[colName] || '');
+    if (sampleVal.includes('|')) {
+      dealKeyCol = colName;
+      console.log('[Preisliste] Deal-Key Spalte gefunden:', colName, '→', sampleVal);
+      break;
+    }
+  }
+  // fallback: look by column name
+  if (!dealKeyCol) {
+    dealKeyCol = availableCols.find((k) =>
+      ['deal-key', 'dealkey', 'deal_key', 'key', 'id'].includes(k.toLowerCase())
+    ) || null;
+  }
+
+  console.log('[Preisliste] Deal-Key Spalte:', dealKeyCol);
 
   const lookupMap = {};
   const models = new Set();
   const storageByModel = {};
 
-  rows.forEach((row, i) => {
-    const key = col(row, 'Deal-Key', 'DealKey', 'deal-key', 'deal_key', 'Key', 'ID');
-    if (!key || typeof key !== 'string') return;
+  rows.forEach((row) => {
+    const key = dealKeyCol ? String(row[dealKeyCol] || '') : col(row, 'Deal-Key', 'DealKey', 'deal-key', 'deal_key', 'Key');
+    if (!key || !key.includes('|')) return;
 
     lookupMap[key] = {
       key,
       nachfrage: numCol(row, 'Nachfrage 1-10', 'Nachfrage', 'nachfrage'),
-      verkaufVon: numCol(row, 'Verkauf von', 'VerkaufVon', 'verkauf_von'),
-      verkaufBis: numCol(row, 'Verkauf bis', 'VerkaufBis', 'verkauf_bis'),
+      verkaufVon: numCol(row, 'Verkauf von', 'VerkaufVon'),
+      verkaufBis: numCol(row, 'Verkauf bis', 'VerkaufBis'),
       avgVerkauf: numCol(row, 'Ø Verkauf', 'O Verkauf', 'Avg Verkauf', 'AvgVerkauf', 'Durchschnitt'),
-      zielEK: numCol(row, 'Einkauf von (80', 'Einkauf von', 'EinkaufVon', 'Ziel-EK', 'ZielEK'),
-      maxEK: numCol(row, 'Einkauf bis (50', 'Einkauf bis', 'EinkaufBis', 'Max-EK', 'MaxEK'),
+      zielEK: numCol(row, 'Einkauf von (80', 'Einkauf von', 'EinkaufVon', 'Ziel-EK'),
+      maxEK: numCol(row, 'Einkauf bis (50', 'Einkauf bis', 'EinkaufBis', 'Max-EK'),
       sofortkauf: numCol(row, 'Sofort kaufen bis', 'SofortKaufen', 'Sofortkauf'),
-      ebayLink: col(row, 'eBay verkauft', 'eBayLink', 'Ebay Verkauft', 'ebay', 'eBay-Link'),
-      marktbeobachtung: col(row, 'Marktbeobachtung', 'Markt', 'Beobachtung'),
-      empfehlung: col(row, 'Empfehlung', 'empfehlung'),
+      ebayLink: col(row, 'eBay verkauft', 'eBayLink', 'Ebay Verkauft', 'ebay'),
+      marktbeobachtung: col(row, 'Marktbeobachtung', 'Markt'),
+      empfehlung: col(row, 'Empfehlung'),
     };
 
     const parts = key.split('|');
@@ -92,7 +111,13 @@ export function parsePricelist(arrayBuffer) {
     models: Array.from(models).sort(),
     storageByModel: storageByModelSorted,
     availableCols,
+    firstRowSample: Object.fromEntries(
+      Object.entries(firstRow).slice(0, 6).map(([k, v]) => [k, String(v).slice(0, 60)])
+    ),
+    sheetNames,
+    usedSheet: sheetName,
     totalRows: rows.length,
+    dealKeyCol,
   };
 }
 
@@ -104,4 +129,5 @@ export function lookupDeal(lookupMap, model, storage) {
   });
   return match ? lookupMap[match] : null;
 }
+
 

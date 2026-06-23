@@ -196,21 +196,43 @@ export default function App() {
       )}
 
       {pricelist && pricelist.models.length === 0 && (
-        <div className="mx-6 mt-4 p-4 bg-yellow-950 border border-yellow-700 rounded-xl text-sm text-yellow-300">
-          <strong>Keine Modelle gefunden.</strong> Die Preisliste wurde geladen ({pricelist.totalRows} Zeilen), aber der Deal-Key konnte nicht erkannt werden.
-          {pricelist.availableCols?.length > 0 && (
-            <p className="mt-2 text-yellow-500 text-xs">
-              Gefundene Spalten: <code className="bg-yellow-900/50 px-1 rounded">{pricelist.availableCols.slice(0, 10).join(', ')}</code>
-              {pricelist.availableCols.length > 10 && ` … (+${pricelist.availableCols.length - 10} weitere)`}
-            </p>
-          )}
-          <p className="mt-2 text-yellow-500 text-xs">
-            Erwartet wird eine Spalte namens <code className="bg-yellow-900/50 px-1 rounded">Deal-Key</code> mit Einträgen im Format <code className="bg-yellow-900/50 px-1 rounded">iPhone|iPhone 16 Pro|128GB</code>.
-            Öffne die Browser-Konsole (F12) für Details.
+        <div className="m-6 p-5 bg-orange-950 border-2 border-orange-600 rounded-xl text-sm">
+          <p className="text-orange-300 font-bold text-base mb-3">⚠ Preisliste geladen, aber keine Modelle erkannt</p>
+          <p className="text-orange-400 mb-3">
+            {pricelist.totalRows} Zeilen gefunden im Sheet <strong className="text-white">„{pricelist.usedSheet}"</strong>
+            {pricelist.sheetNames?.length > 1 && ` (verfügbare Sheets: ${pricelist.sheetNames.join(', ')})`}.
+            {pricelist.dealKeyCol
+              ? <> Deal-Key Spalte erkannt: <strong className="text-white">„{pricelist.dealKeyCol}"</strong> — aber kein <code className="bg-orange-900 px-1 rounded">A|B|C</code> Format gefunden.</>
+              : <> Keine Spalte mit <code className="bg-orange-900 px-1 rounded">Kategorie|Modell|Speicher</code> Format gefunden.</>
+            }
           </p>
-          <button onClick={resetPricelist} className="mt-3 px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-xs">
-            Neue Datei laden
-          </button>
+          {pricelist.availableCols?.length > 0 && (
+            <div className="mb-3">
+              <p className="text-orange-500 text-xs mb-1">Gefundene Spalten ({pricelist.availableCols.length}):</p>
+              <p className="text-orange-300 text-xs font-mono bg-orange-900/40 p-2 rounded break-all">
+                {pricelist.availableCols.join(' · ')}
+              </p>
+            </div>
+          )}
+          {pricelist.firstRowSample && Object.keys(pricelist.firstRowSample).length > 0 && (
+            <div className="mb-4">
+              <p className="text-orange-500 text-xs mb-1">Erste Datenzeile (Auszug):</p>
+              <div className="text-xs font-mono bg-orange-900/40 p-2 rounded space-y-0.5">
+                {Object.entries(pricelist.firstRowSample).map(([k, v]) => (
+                  <div key={k}><span className="text-orange-400">{k}:</span> <span className="text-white">{v || '(leer)'}</span></div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <label className="cursor-pointer px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors">
+              Andere Datei laden
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileInput} />
+            </label>
+            <button onClick={resetPricelist} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition-colors">
+              Zurücksetzen
+            </button>
+          </div>
         </div>
       )}
 
