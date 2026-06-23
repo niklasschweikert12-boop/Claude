@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "convert": "node scripts/convert-pricelist.mjs",
+    "prebuild": "node scripts/convert-pricelist.mjs || true",
+    "predev": "node scripts/convert-pricelist.mjs || true",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",

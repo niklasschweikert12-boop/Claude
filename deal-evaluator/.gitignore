@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Pricelist xlsx (contains business data — not committed)
+*.xlsx
+*.xls
+
+# Generated pricelist data
+src/data/pricelist.js
