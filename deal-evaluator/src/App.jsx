@@ -78,6 +78,14 @@ export default function App() {
     setShowSettings(false);
   };
 
+  const resetPricelist = () => {
+    localStorage.removeItem('sh_pricelist');
+    setPricelist(null);
+    setModell('');
+    setModelQuery('');
+    setSpeicher('');
+  };
+
   const filteredModels = pricelist
     ? pricelist.models.filter((m) => m.toLowerCase().includes(modelQuery.toLowerCase()))
     : [];
@@ -156,11 +164,19 @@ export default function App() {
               <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileInput} />
             </label>
           ) : (
-            <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-400 transition-colors">
-              <Upload className="w-3 h-3" />
-              Preisliste aktualisieren
-              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileInput} />
-            </label>
+            <>
+              <span className="text-xs text-gray-500">
+                {pricelist.models.length} Modelle
+              </span>
+              <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-400 transition-colors">
+                <Upload className="w-3 h-3" />
+                Aktualisieren
+                <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileInput} />
+              </label>
+              <button onClick={resetPricelist} className="px-3 py-1.5 bg-gray-800 hover:bg-red-900 rounded-lg text-xs text-gray-500 hover:text-red-400 transition-colors">
+                Zurücksetzen
+              </button>
+            </>
           )}
           <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors">
             <Settings className="w-4 h-4 text-gray-400" />
@@ -188,6 +204,25 @@ export default function App() {
 
       {fileError && (
         <div className="mx-6 mt-4 p-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-400">{fileError}</div>
+      )}
+
+      {pricelist && pricelist.models.length === 0 && (
+        <div className="mx-6 mt-4 p-4 bg-yellow-950 border border-yellow-700 rounded-xl text-sm text-yellow-300">
+          <strong>Keine Modelle gefunden.</strong> Die Preisliste wurde geladen ({pricelist.totalRows} Zeilen), aber der Deal-Key konnte nicht erkannt werden.
+          {pricelist.availableCols?.length > 0 && (
+            <p className="mt-2 text-yellow-500 text-xs">
+              Gefundene Spalten: <code className="bg-yellow-900/50 px-1 rounded">{pricelist.availableCols.slice(0, 10).join(', ')}</code>
+              {pricelist.availableCols.length > 10 && ` … (+${pricelist.availableCols.length - 10} weitere)`}
+            </p>
+          )}
+          <p className="mt-2 text-yellow-500 text-xs">
+            Erwartet wird eine Spalte namens <code className="bg-yellow-900/50 px-1 rounded">Deal-Key</code> mit Einträgen im Format <code className="bg-yellow-900/50 px-1 rounded">iPhone|iPhone 16 Pro|128GB</code>.
+            Öffne die Browser-Konsole (F12) für Details.
+          </p>
+          <button onClick={resetPricelist} className="mt-3 px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg text-xs">
+            Neue Datei laden
+          </button>
+        </div>
       )}
 
       {!pricelist ? (
