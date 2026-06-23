@@ -2,7 +2,7 @@
 // Run: node scripts/convert-pricelist.mjs
 // Reads the xlsx and writes src/data/pricelist.js
 
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as XLSX from 'xlsx';
@@ -11,26 +11,39 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 
 // ── Find the xlsx file ───────────────────────────────────────────────────────
-const candidates = [
+// First try known names, then pick any .xlsx in the project root
+const knownNames = [
+  'apple_einkauf_preisliste_realistisch_2026-05-11.xlsx',
   'apple_einkauf_preisliste_realistisch_2026_06_21_iphones_v6_ebay_.xlsx',
   'preisliste.xlsx',
   'pricelist.xlsx',
 ];
 
 let xlsxPath = null;
-for (const name of candidates) {
+for (const name of knownNames) {
   try {
     const p = resolve(root, name);
-    readFileSync(p); // throws if not found
+    readFileSync(p);
     xlsxPath = p;
     break;
   } catch {}
 }
 
+// Fallback: find any xlsx in project root
+if (!xlsxPath) {
+  try {
+    const files = readdirSync(root).filter((f) => f.endsWith('.xlsx') || f.endsWith('.xls'));
+    if (files.length > 0) {
+      xlsxPath = resolve(root, files[0]);
+      console.log('📂  Gefundene Datei:', files[0]);
+    }
+  } catch {}
+}
+
 if (!xlsxPath) {
   console.error('\n❌  Preisliste nicht gefunden.');
-  console.error('    Lege die Datei in den Projektordner:');
-  console.error('    deal-evaluator/apple_einkauf_preisliste_realistisch_2026_06_21_iphones_v6_ebay_.xlsx\n');
+  console.error('    Lege die Datei in den Projektordner deal-evaluator/ und benenne sie z.B.:');
+  console.error('    apple_einkauf_preisliste_realistisch_2026-05-11.xlsx\n');
   process.exit(1);
 }
 
