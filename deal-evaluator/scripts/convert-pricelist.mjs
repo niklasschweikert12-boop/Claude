@@ -11,39 +11,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 
 // ── Find the xlsx file ───────────────────────────────────────────────────────
-// First try known names, then pick any .xlsx in the project root
 const knownNames = [
   'apple_einkauf_preisliste_realistisch_2026-05-11.xlsx',
-  'apple_einkauf_preisliste_realistisch_2026_06_21_iphones_v6_ebay_.xlsx',
   'preisliste.xlsx',
   'pricelist.xlsx',
+  'apple_einkauf_preisliste_realistisch_2026_06_21_iphones_v6_ebay_.xlsx',
 ];
 
 let xlsxPath = null;
 for (const name of knownNames) {
-  try {
-    const p = resolve(root, name);
-    readFileSync(p);
-    xlsxPath = p;
-    break;
-  } catch {}
+  try { readFileSync(resolve(root, name)); xlsxPath = resolve(root, name); break; } catch {}
 }
-
-// Fallback: find any xlsx in project root
 if (!xlsxPath) {
   try {
     const files = readdirSync(root).filter((f) => f.endsWith('.xlsx') || f.endsWith('.xls'));
-    if (files.length > 0) {
-      xlsxPath = resolve(root, files[0]);
-      console.log('📂  Gefundene Datei:', files[0]);
-    }
+    if (files.length > 0) { xlsxPath = resolve(root, files[0]); console.log('📂  Datei gefunden:', files[0]); }
   } catch {}
 }
-
 if (!xlsxPath) {
-  console.error('\n❌  Preisliste nicht gefunden.');
-  console.error('    Lege die Datei in den Projektordner deal-evaluator/ und benenne sie z.B.:');
-  console.error('    apple_einkauf_preisliste_realistisch_2026-05-11.xlsx\n');
+  console.error('\n❌  Keine xlsx-Datei im Projektordner gefunden.');
+  console.error('    Lege die Preisliste in: deal-evaluator/\n');
   process.exit(1);
 }
 
@@ -55,85 +42,103 @@ const workbook = XLSX.read(readFileSync(xlsxPath), { type: 'buffer' });
 const sheetName =
   workbook.SheetNames.find((n) => n.toLowerCase() === 'preisliste') ||
   workbook.SheetNames[0];
-
-console.log('📋  Sheet:', sheetName, '(verfügbar:', workbook.SheetNames.join(', ') + ')');
+console.log('📋  Sheet:', sheetName, '| verfügbar:', workbook.SheetNames.join(', '));
 
 const sheet = workbook.Sheets[sheetName];
-const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-if (rows.length === 0) { console.error('❌  Sheet ist leer.'); process.exit(1); }
+// Read as raw array-of-arrays to find the real header row
+const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-const cols = Object.keys(rows[0]);
-console.log('📊  Spalten:', cols.join(' | '));
-console.log('📊  Erste Zeile:', JSON.stringify(rows[0]).slice(0, 200));
-
-// ── Auto-detect Deal-Key column ───────────────────────────────────────────────
-function findCol(row, ...names) {
-  const rowKeys = Object.keys(row);
-  for (const name of names) {
-    if (row[name] !== undefined && row[name] !== '') return name;
-    const ci = rowKeys.find((k) => k.toLowerCase() === name.toLowerCase());
-    if (ci) return ci;
-    const partial = rowKeys.find((k) => k.toLowerCase().includes(name.toLowerCase()));
-    if (partial) return partial;
+// Find the header row: the first row that contains "Modell" or "Deal-Key"
+let headerRowIndex = -1;
+for (let i = 0; i < Math.min(10, raw.length); i++) {
+  const row = raw[i].map(String);
+  if (row.some((c) => c === 'Modell' || c === 'Deal-Key' || c === 'Kategorie')) {
+    headerRowIndex = i;
+    break;
   }
-  return null;
 }
 
-// Detect Deal-Key column by looking for pipe-separated values
-let dealKeyCol = cols.find((c) => String(rows[0][c] || rows[1]?.[c] || '').includes('|'));
-if (!dealKeyCol) dealKeyCol = findCol(rows[0], 'Deal-Key', 'DealKey', 'deal-key', 'Key');
-if (!dealKeyCol) { console.error('❌  Keine Deal-Key Spalte gefunden (suche Spalte mit A|B|C Werten).'); process.exit(1); }
-console.log('🔑  Deal-Key Spalte:', dealKeyCol);
-
-function getCol(row, ...names) {
-  for (const name of names) {
-    if (row[name] !== undefined && row[name] !== '') return row[name];
-    const k = Object.keys(row).find((k) => k.toLowerCase().includes(name.toLowerCase()));
-    if (k && row[k] !== undefined && row[k] !== '') return row[k];
-  }
-  return '';
+if (headerRowIndex === -1) {
+  console.error('❌  Keine Header-Zeile gefunden (suche nach "Modell" / "Deal-Key" / "Kategorie").');
+  process.exit(1);
 }
-function numVal(row, ...names) { return parseFloat(getCol(row, ...names)) || 0; }
 
-// ── Convert rows ─────────────────────────────────────────────────────────────
+const headers = raw[headerRowIndex].map(String);
+console.log('📊  Header (Zeile', headerRowIndex + 1, '):', headers.join(' | '));
+
+const dataRows = raw.slice(headerRowIndex + 1);
+
+function h(name) { return headers.indexOf(name); }
+const iKey      = h('Deal-Key');
+const iKat      = h('Kategorie');
+const iModell   = h('Modell');
+const iSpeicher = h('Speicher / Variante');
+const iNachfr   = h('Nachfrage 1-10');
+const iVKvon    = h('Verkauf von');
+const iVKbis    = h('Verkauf bis');
+const iVKavg    = h('Ø Verkauf');
+const iEKvon    = h('Einkauf von (80€ Gewinn)');
+const iEKbis    = h('Einkauf bis (50€ Gewinn)');
+const iSofort   = h('Sofort kaufen bis (70€ Gewinn)');
+const iMarkt    = h('Marktbeobachtung');
+const iEmpf     = h('Empfehlung');
+const iEbay     = h('eBay verkauft');
+
+console.log('🔑  Spalten-Indizes:', { key: iKey, modell: iModell, speicher: iSpeicher, ekVon: iEKvon, ekBis: iEKbis });
+
+const n = (v) => parseFloat(v) || 0;
+const s = (v) => String(v || '').trim();
+
 const entries = [];
-const models = new Set();
+const models  = new Set();
 const storageByModel = {};
 
-for (const row of rows) {
-  const key = String(row[dealKeyCol] || '').trim();
+for (const row of dataRows) {
+  // Build key: prefer explicit Deal-Key column, else assemble from parts
+  let key = iKey >= 0 ? s(row[iKey]) : '';
+  if (!key && iKat >= 0 && iModell >= 0 && iSpeicher >= 0) {
+    const kat  = s(row[iKat]);
+    const mod  = s(row[iModell]);
+    const spe  = s(row[iSpeicher]);
+    if (kat && mod && spe) key = `${kat}|${mod}|${spe}`;
+  }
   if (!key || !key.includes('|')) continue;
 
-  const parts = key.split('|');
-  if (parts.length < 3) continue;
+  const parts   = key.split('|');
+  const model   = parts[1]?.trim();
+  const storage = parts[2]?.trim();
+  if (!model || !storage) continue;
 
-  const model = parts[1].trim();
-  const storage = parts[2].trim();
   models.add(model);
   if (!storageByModel[model]) storageByModel[model] = [];
   if (!storageByModel[model].includes(storage)) storageByModel[model].push(storage);
 
   entries.push({
     key,
-    nachfrage: numVal(row, 'Nachfrage 1-10', 'Nachfrage'),
-    verkaufVon: numVal(row, 'Verkauf von'),
-    verkaufBis: numVal(row, 'Verkauf bis'),
-    avgVerkauf: numVal(row, 'Ø Verkauf', 'O Verkauf', 'Avg Verkauf', 'Durchschnitt'),
-    zielEK: numVal(row, 'Einkauf von (80', 'Einkauf von'),
-    maxEK: numVal(row, 'Einkauf bis (50', 'Einkauf bis'),
-    sofortkauf: numVal(row, 'Sofort kaufen bis', 'Sofortkauf'),
-    ebayLink: String(getCol(row, 'eBay verkauft', 'eBayLink', 'Ebay Verkauft') || ''),
-    marktbeobachtung: String(getCol(row, 'Marktbeobachtung', 'Markt') || ''),
-    empfehlung: String(getCol(row, 'Empfehlung') || ''),
+    nachfrage:        n(row[iNachfr]),
+    verkaufVon:       n(row[iVKvon]),
+    verkaufBis:       n(row[iVKbis]),
+    avgVerkauf:       n(row[iVKavg]),
+    zielEK:           n(row[iEKvon]),
+    maxEK:            n(row[iEKbis]),
+    sofortkauf:       n(row[iSofort]),
+    marktbeobachtung: s(row[iMarkt]),
+    empfehlung:       s(row[iEmpf]),
+    ebayLink:         s(row[iEbay]),
   });
 }
 
+if (entries.length === 0) {
+  console.error('❌  Keine Datenzeilen gefunden. Prüfe die Dateistruktur.');
+  process.exit(1);
+}
+
 const storageOrder = ['64GB', '128GB', '256GB', '512GB', '1TB'];
-const modelList = Array.from(models).sort();
-const storageMap = {};
+const modelList    = Array.from(models).sort();
+const storageMap   = {};
 for (const [m, arr] of Object.entries(storageByModel)) {
-  storageMap[m] = arr.sort((a, b) => {
+  storageMap[m] = [...arr].sort((a, b) => {
     const ia = storageOrder.indexOf(a), ib = storageOrder.indexOf(b);
     if (ia === -1 && ib === -1) return a.localeCompare(b);
     if (ia === -1) return 1; if (ib === -1) return -1;
@@ -145,15 +150,14 @@ for (const [m, arr] of Object.entries(storageByModel)) {
 mkdirSync(resolve(root, 'src/data'), { recursive: true });
 const outPath = resolve(root, 'src/data/pricelist.js');
 
-const js = `// AUTO-GENERATED — do not edit manually.
-// Source: ${sheetName} (${entries.length} entries, ${modelList.length} models)
+writeFileSync(outPath, `// AUTO-GENERATED — do not edit manually.
+// Source: ${sheetName} (${entries.length} Einträge, ${modelList.length} Modelle)
 
 export const MODELS = ${JSON.stringify(modelList, null, 2)};
 
 export const STORAGE_BY_MODEL = ${JSON.stringify(storageMap, null, 2)};
 
 export const PRICELIST = ${JSON.stringify(entries, null, 2)};
-`;
+`, 'utf8');
 
-writeFileSync(outPath, js, 'utf8');
 console.log(`✅  ${entries.length} Einträge, ${modelList.length} Modelle → src/data/pricelist.js`);
